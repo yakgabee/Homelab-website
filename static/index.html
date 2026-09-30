@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1d2330;
+    --muted: #6b7280;
+    --border: #e3e6eb;
+    --track: #e9ecf1;
+    --ok: #1f9d55;
+    --warn: #d97706;
+    --bad: #dc2626;
+    --accent: #c51a4a; /* raspberry */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216;
+      --card: #171b21;
+      --text: #e6e8eb;
+      --muted: #8b93a1;
+      --border: #262c35;
+      --track: #252b34;
+      --ok: #34c77b;
+      --warn: #f0a33a;
+      --bad: #f05252;
+      --accent: #e0457a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; display: flex; align-items: center; gap: 10px; }
+  h1 .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  .sub { color: var(--muted); font-size: 13px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 28px 0 10px; font-weight: 600; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .label { font-weight: 600; overflow-wrap: anywhere; }
+  .big { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .meter { height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; margin: 10px 0 8px; }
+  .meter > span { display: block; height: 100%; border-radius: 5px; background: var(--ok); transition: width .6s ease; }
+  .meter.warn > span { background: var(--warn); }
+  .meter.bad > span { background: var(--bad); }
+  .muted { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .stat .big { font-size: 20px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .running { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  .degraded, .unknown { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .down { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+  .running::before { animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  ul.checks { list-style: none; padding: 0; margin: 12px 0 0; }
+  ul.checks li { display: flex; gap: 8px; font-size: 13px; color: var(--muted); padding: 3px 0; }
+  ul.checks b { color: var(--text); font-weight: 600; min-width: 62px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .error { background: color-mix(in srgb, var(--bad) 12%, var(--card)); border-color: var(--bad); color: var(--text); display: none; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><span class="dot"></span><span id="hostname">Raspberry Pi</span></h1>
+    <span class="sub" id="updated">Loading…</span>
+  </header>
+
+  <div class="card error" id="error">Can't reach the Pi — retrying…</div>
+
+  <h2>Services</h2>
+  <div class="grid" id="services"></div>
+
+  <h2>Memory</h2>
+  <div class="grid" id="memory"></div>
+
+  <h2>Storage</h2>
+  <div class="grid" id="storage"></div>
+
+  <h2>System</h2>
+  <div class="card stats" id="system"></div>
+</main>
+
+<script>
+const REFRESH_MS = 5000;
+
+const fmtBytes = (b) => {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+  return `${b.toFixed(b >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+};
+
+const fmtUptime = (s) => {
+  if (s == null) return "—";
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+};
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const level = (pct) => pct >= 90 ? "bad" : pct >= 75 ? "warn" : "";
+
+const meterCard = (title, pct, detail) => `
+  <div class="card">
+    <div class="row"><span class="label">${esc(title)}</span><span class="big">${pct}%</span></div>
+    <div class="meter ${level(pct)}"><span style="width:${Math.min(pct, 100)}%"></span></div>
+    <div class="muted">${detail}</div>
+  </div>`;
+
+function render(data) {
+  document.getElementById("hostname").textContent = data.hostname;
+  document.title = `${data.hostname} · Pi Dashboard`;
+
+  document.getElementById("services").innerHTML = data.services.length
+    ? data.services.map((s) => `
+      <div class="card">
+        <div class="row">
+          <span class="label">${s.link ? `<a href="${esc(s.link)}" target="_blank" rel="noopener">${esc(s.name)}</a>` : esc(s.name)}</span>
+          <span class="badge ${esc(s.state)}">${esc(s.state)}</span>
+        </div>
+        <ul class="checks">${s.checks.map((c) =>
+          `<li><b>${esc(c.type)}</b><span>${esc(c.detail)}</span></li>`).join("")}</ul>
+      </div>`).join("")
+    : `<div class="card muted">No services configured.</div>`;
+
+  const m = data.memory;
+  let mem = meterCard("RAM", m.percent,
+    `${fmtBytes(m.used)} used of ${fmtBytes(m.total)} · ${fmtBytes(m.available)} available`);
+  if (m.swap_total) {
+    mem += meterCard("Swap", m.swap_percent, `${fmtBytes(m.swap_used)} used of ${fmtBytes(m.swap_total)}`);
+  }
+  document.getElementById("memory").innerHTML = mem;
+
+  document.getElementById("storage").innerHTML = data.storage.map((d) => d.error
+    ? `<div class="card"><span class="label">${esc(d.mount)}</span><div class="muted">${esc(d.error)}</div></div>`
+    : meterCard(d.mount, d.percent, `${fmtBytes(d.used)} used of ${fmtBytes(d.total)} · ${fmtBytes(d.free)} free`)
+  ).join("");
+
+  const temp = data.cpu_temp;
+  const tempClass = temp == null ? "" : temp >= 80 ? "down" : temp >= 70 ? "degraded" : "";
+  document.getElementById("system").innerHTML = `
+    <div class="stat"><div class="muted">CPU temp</div><div class="big ${tempClass}" style="background:none">${temp == null ? "—" : temp + " °C"}</div></div>
+    <div class="stat"><div class="muted">Load (1/5/15m)</div><div class="big">${data.load ? data.load.join(" / ") : "—"}</div></div>
+    <div class="stat"><div class="muted">Uptime</div><div class="big">${fmtUptime(data.uptime)}</div></div>`;
+
+  document.getElementById("updated").textContent =
+    `Updated ${new Date(data.timestamp * 1000).toLocaleTimeString()} · refreshes every ${REFRESH_MS / 1000}s`;
+}
+
+async function refresh() {
+  try {
+    const res = await fetch("/api/status", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    render(await res.json());
+    document.getElementById("error").style.display = "none";
+  } catch {
+    document.getElementById("error").style.display = "block";
+  } finally {
+    setTimeout(refresh, REFRESH_MS);
+  }
+}
+
+refresh();
+</script>
+</body>
+</html>

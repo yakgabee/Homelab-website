@@ -1,0 +1,13 @@
+{
+  "host": "0.0.0.0",
+  "port": 8080,
+  "mounts": [],
+  "services": [
+    {
+      "name": "Jellyfin",
+      "systemd": "jellyfin",
+      "url": "http://localhost:8096/health",
+      "link": "http://{host}:8096"
+    }
+  ]
+}
