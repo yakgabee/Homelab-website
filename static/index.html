@@ -68,6 +68,7 @@
   ul.checks b { color: var(--text); font-weight: 600; min-width: 62px; }
   .peers { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
   .peers .big { font-size: 22px; }
+  .peers li { flex-direction: column; gap: 0; padding: 5px 0; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   .error { background: color-mix(in srgb, var(--bad) 12%, var(--card)); border-color: var(--bad); color: var(--text); display: none; margin-bottom: 12px; }
@@ -125,7 +126,7 @@ const meterCard = (title, pct, detail) => `
 
 const peersBlock = (p) => `
   <div class="peers">
-    <div class="row"><span class="muted">Peers connected</span>
+    <div class="row"><span class="muted">Devices online</span>
       <span class="big">${p.connected}<span class="muted"> / ${p.total}</span></span></div>
     ${p.online.length ? `<ul class="checks">${p.online.map((o) =>
       `<li><b>${esc(o.name)}</b><span>${esc(o.ip)}${o.type ? ` · ${esc(o.type)}` : ""}</span></li>`).join("")}</ul>` : ""}

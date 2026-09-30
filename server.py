@@ -176,38 +176,45 @@ def check_http(url):
         return {"type": "http", "ok": False, "detail": f"unreachable ({reason})"}
 
 
-def check_netbird():
-    """Ask the local NetBird client which peers are connected to this Pi."""
-    code, out = run(["netbird", "status", "--json"])
+def check_tailscale():
+    """Ask the local Tailscale client which devices on the tailnet are online."""
+    code, out = run(["tailscale", "status", "--json"])
     if code is None:
-        return {"type": "netbird", "ok": None, "detail": "netbird CLI not found"}, None
+        return {"type": "tailscale", "ok": None, "detail": "tailscale CLI not found"}, None
     try:
         status = json.loads(out)
     except ValueError:
-        # Not JSON: usually "daemon not running" or a permissions error.
-        detail = out.splitlines()[0] if out else f"netbird status exited with {code}"
-        return {"type": "netbird", "ok": False, "detail": detail}, None
+        # Not JSON: usually "tailscaled not running" or a permissions error.
+        detail = out.splitlines()[0] if out else f"tailscale status exited with {code}"
+        return {"type": "tailscale", "ok": False, "detail": detail}, None
 
-    connected = bool(status.get("management", {}).get("connected"))
-    peers = status.get("peers") or {}
-    online = [
-        {
-            "name": (p.get("fqdn") or "").split(".")[0] or p.get("netbirdIp", "?"),
-            "ip": p.get("netbirdIp", ""),
-            "type": p.get("connectionType", ""),
-        }
-        for p in peers.get("details") or []
-        if str(p.get("status", "")).lower() == "connected"
-    ]
+    backend = status.get("BackendState", "")
+    self_ips = (status.get("Self") or {}).get("TailscaleIPs") or []
+    peers = list((status.get("Peer") or {}).values())
+    online = []
+    for p in peers:
+        if not p.get("Online"):
+            continue
+        if p.get("CurAddr"):
+            link = "direct"
+        elif p.get("Active") and p.get("Relay"):
+            link = f"relay ({p['Relay']})"
+        else:
+            link = "idle"
+        online.append({
+            "name": p.get("HostName") or (p.get("DNSName") or "?").split(".")[0],
+            "ip": (p.get("TailscaleIPs") or [""])[0],
+            "type": " · ".join(x for x in (p.get("OS", ""), link) if x),
+        })
     online.sort(key=lambda p: p["name"].lower())
-    ip = (status.get("netbirdIp") or "").split("/")[0]
-    detail = ("connected" if connected else "not connected to management") + (f" · {ip}" if ip else "")
-    peer_info = {
-        "connected": peers.get("connected", len(online)),
-        "total": peers.get("total", len(peers.get("details") or [])),
+
+    ok = backend == "Running"
+    detail = ("connected" if ok else (backend or "unknown").lower()) + (f" · {self_ips[0]}" if self_ips else "")
+    return {"type": "tailscale", "ok": ok, "detail": detail}, {
+        "connected": len(online),
+        "total": len(peers),
         "online": online,
     }
-    return {"type": "netbird", "ok": connected, "detail": detail}, peer_info
 
 
 def check_service(service, request_host):
@@ -219,8 +226,8 @@ def check_service(service, request_host):
         checks.append(check_docker(service["docker"]))
     if service.get("url"):
         checks.append(check_http(service["url"]))
-    if service.get("netbird"):
-        check, peers = check_netbird()
+    if service.get("tailscale"):
+        check, peers = check_tailscale()
         checks.append(check)
 
     known = [c["ok"] for c in checks if c["ok"] is not None]

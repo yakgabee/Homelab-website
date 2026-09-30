@@ -10,10 +10,10 @@
       "link": "http://{host}:8096"
     },
     {
-      "name": "NetBird",
-      "netbird": true,
-      "systemd": "netbird",
-      "link": "https://app.netbird.io"
+      "name": "Tailscale",
+      "tailscale": true,
+      "systemd": "tailscaled",
+      "link": "https://login.tailscale.com/admin/machines"
     }
   ]
 }
