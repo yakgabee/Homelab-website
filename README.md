@@ -21,6 +21,8 @@ python3 server.py
 
 Then open `http://<pi-ip-address>:8080` from any device on your network (for example `http://raspberrypi.local:8080`).
 
+If port 8080 is already taken, run `python3 server.py --port 8090` instead, or set `"port"` in `config.json`. To see what is using a port, run `sudo ss -ltnp 'sport = :8080'`.
+
 ## Run it on boot
 
 ```bash

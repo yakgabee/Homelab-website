@@ -6,10 +6,13 @@ storage, memory, CPU temperature, uptime and whether configured services
 (e.g. Jellyfin) are running. Uses only the Python standard library.
 """
 
+import argparse
+import errno
 import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -245,10 +248,25 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Raspberry Pi status dashboard")
+    parser.add_argument("--port", type=int, help="port to listen on (overrides config.json)")
+    args = parser.parse_args()
+
     config = load_config()
+    port = args.port or int(os.environ.get("DASHBOARD_PORT", config["port"]))
     Handler.config = config
-    server = ThreadingHTTPServer((config["host"], int(config["port"])), Handler)
-    print(f"Pi dashboard running on http://{config['host']}:{config['port']}")
+    try:
+        server = ThreadingHTTPServer((config["host"], port), Handler)
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+        sys.exit(
+            f"Port {port} is already in use.\n"
+            f"  See what is using it:   sudo ss -ltnp 'sport = :{port}'\n"
+            f"  If it's this dashboard: sudo systemctl stop pi-dashboard\n"
+            f"  Or pick another port:   python3 server.py --port 8090"
+        )
+    print(f"Pi dashboard running on http://{config['host']}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
