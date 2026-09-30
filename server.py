@@ -45,7 +45,15 @@ def load_config():
     config = dict(DEFAULT_CONFIG)
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
-            config.update(json.load(f))
+            try:
+                config.update(json.load(f))
+            except json.JSONDecodeError as exc:
+                sys.exit(
+                    f"{CONFIG_PATH} isn't valid JSON: {exc.msg} "
+                    f"(line {exc.lineno}, column {exc.colno}).\n"
+                    f"  Check that the file starts with {{ and ends with }},\n"
+                    f"  or start over with: cp config.example.json config.json"
+                )
     return config
 
 
