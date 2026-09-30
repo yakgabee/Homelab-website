@@ -8,6 +8,12 @@
       "systemd": "jellyfin",
       "url": "http://localhost:8096/health",
       "link": "http://{host}:8096"
+    },
+    {
+      "name": "NetBird",
+      "netbird": true,
+      "systemd": "netbird",
+      "link": "https://app.netbird.io"
     }
   ]
 }

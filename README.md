@@ -56,6 +56,7 @@ Each service can use any combination of checks. It shows **running** when every 
 | `systemd` | Unit name; passes when `systemctl is-active` reports `active` |
 | `docker` | Container name; passes when the container state is `running` |
 | `url` | HTTP URL; passes on a 2xx or 3xx response |
+| `netbird` | `true` to read `netbird status --json`; passes when NetBird is connected and shows how many peers are connected to the Pi |
 | `link` | Optional link on the card. `{host}` becomes whatever hostname you used to open the dashboard. |
 
 ### Jellyfin in Docker
@@ -72,6 +73,16 @@ If Jellyfin runs in a container instead of as a system service:
 ```
 
 The user running the dashboard must be in the `docker` group (`sudo usermod -aG docker pi`). Otherwise drop the `docker` field and rely on the `url` check.
+
+### NetBird
+
+```json
+{ "name": "NetBird", "netbird": true, "systemd": "netbird", "link": "https://app.netbird.io" }
+```
+
+The card shows the Pi's NetBird IP, how many peers are connected, and each connected device's name, IP and connection type (P2P or Relayed). The count covers devices with an active tunnel to the Pi: a device that's online but not allowed to reach the Pi by your access policies won't be counted.
+
+If the card says `permission denied`, the dashboard user can't talk to the NetBird daemon. Check that `netbird status` works as that user.
 
 ### Adding more services
 

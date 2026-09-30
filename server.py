@@ -176,14 +176,52 @@ def check_http(url):
         return {"type": "http", "ok": False, "detail": f"unreachable ({reason})"}
 
 
+def check_netbird():
+    """Ask the local NetBird client which peers are connected to this Pi."""
+    code, out = run(["netbird", "status", "--json"])
+    if code is None:
+        return {"type": "netbird", "ok": None, "detail": "netbird CLI not found"}, None
+    try:
+        status = json.loads(out)
+    except ValueError:
+        # Not JSON: usually "daemon not running" or a permissions error.
+        detail = out.splitlines()[0] if out else f"netbird status exited with {code}"
+        return {"type": "netbird", "ok": False, "detail": detail}, None
+
+    connected = bool(status.get("management", {}).get("connected"))
+    peers = status.get("peers") or {}
+    online = [
+        {
+            "name": (p.get("fqdn") or "").split(".")[0] or p.get("netbirdIp", "?"),
+            "ip": p.get("netbirdIp", ""),
+            "type": p.get("connectionType", ""),
+        }
+        for p in peers.get("details") or []
+        if str(p.get("status", "")).lower() == "connected"
+    ]
+    online.sort(key=lambda p: p["name"].lower())
+    ip = (status.get("netbirdIp") or "").split("/")[0]
+    detail = ("connected" if connected else "not connected to management") + (f" · {ip}" if ip else "")
+    peer_info = {
+        "connected": peers.get("connected", len(online)),
+        "total": peers.get("total", len(peers.get("details") or [])),
+        "online": online,
+    }
+    return {"type": "netbird", "ok": connected, "detail": detail}, peer_info
+
+
 def check_service(service, request_host):
     checks = []
+    peers = None
     if service.get("systemd"):
         checks.append(check_systemd(service["systemd"]))
     if service.get("docker"):
         checks.append(check_docker(service["docker"]))
     if service.get("url"):
         checks.append(check_http(service["url"]))
+    if service.get("netbird"):
+        check, peers = check_netbird()
+        checks.append(check)
 
     known = [c["ok"] for c in checks if c["ok"] is not None]
     if not known:
@@ -198,7 +236,10 @@ def check_service(service, request_host):
     link = service.get("link")
     if link:
         link = link.replace("{host}", request_host)
-    return {"name": service["name"], "state": state, "checks": checks, "link": link}
+    result = {"name": service["name"], "state": state, "checks": checks, "link": link}
+    if peers is not None:
+        result["peers"] = peers
+    return result
 
 
 # ------------------------------------------------------------------- HTTP
