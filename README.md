@@ -9,6 +9,8 @@ A lightweight status page for a Raspberry Pi 4 that shows:
 
 The page refreshes every 5 seconds. It only needs Python 3, which ships with Raspberry Pi OS, so there's nothing to `pip install`.
 
+There's also a phone app, **Pi AI**, for chatting with a local AI (Ollama) running on the Pi. See [`mobile/README.md`](mobile/README.md).
+
 ## Quick start
 
 On the Pi:

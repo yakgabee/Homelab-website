@@ -10,6 +10,11 @@
       "link": "http://{host}:8096"
     },
     {
+      "name": "Ollama",
+      "systemd": "ollama",
+      "url": "http://localhost:11434/"
+    },
+    {
       "name": "Tailscale",
       "tailscale": true,
       "systemd": "tailscaled",
